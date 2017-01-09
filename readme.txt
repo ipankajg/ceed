@@ -14,6 +14,7 @@ lib - Contains asm code for functions injected in Ceed output
 
 Compile
 -------
+// Linux or Cygwin
 cd src
 make ceed
 
