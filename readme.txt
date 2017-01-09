@@ -28,6 +28,9 @@ To create PE executable: ./ceed -pe < <input>
 Example
 -------
 ./ceed < math.e
+chmod +x a.exe or chmod +x a.out to make the file executable.
+On Windows, even if you produce a.exe in cygwin, you can only run it in cmd
+prompt. If you run output file in cygwin, it won't work.
 
 
 Notes
