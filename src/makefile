@@ -1,7 +1,7 @@
 CC=gcc
 CFLAGS=-w -std=c99
 DEPS = ceed.h ceed.tab.h
-OBJ = lex.yy.o ceed.tab.o ceedcmpl.o ceedelf.o ceedpe.o ceedrtl.o
+OBJ = lex.yy.o ceed.tab.o ceedcmpl.o ceedelf.o ceedpe.o ceedrtl.o main.o ceedcmpl64.o ceedpe64.o 
 
 lex.yy.c ceed.tab.c ceed.tab.h: ceed.l ceed.y
 	bison -d ceed.y

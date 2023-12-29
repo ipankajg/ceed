@@ -127,11 +127,12 @@ typedef struct _IMAGE_IMPORT_DESCRIPTOR {
 } IMAGE_IMPORT_DESCRIPTOR;
 typedef IMAGE_IMPORT_DESCRIPTOR *PIMAGE_IMPORT_DESCRIPTOR;
 
-unsigned char dos_hdr[128] = {
+static unsigned char dos_hdr[128] = {
+#define HDRL sizeof(dos_hdr)
     0x4D, 0x5A, 0x90, 0x00, 0x03, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00,
     0xB8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, HDRL, 0x00, 0x00, 0x00,
     0x0E, 0x1F, 0xBA, 0x0E, 0x00, 0xB4, 0x09, 0xCD, 0x21, 0xB8, 0x01, 0x4C, 0xCD, 0x21, 0x54, 0x68,
     0x69, 0x73, 0x20, 0x70, 0x72, 0x6F, 0x67, 0x72, 0x61, 0x6D, 0x20, 0x63, 0x61, 0x6E, 0x6E, 0x6F,
     0x74, 0x20, 0x62, 0x65, 0x20, 0x72, 0x75, 0x6E, 0x20, 0x69, 0x6E, 0x20, 0x44, 0x4F, 0x53, 0x20,
@@ -163,14 +164,21 @@ unsigned char dos_hdr[128] = {
 // purposes.
 //
 #define CEED_FILE_ALIGN                 0x200           // 512B
-#define CEED_SECTION_ALIGN              0x100000        // 16MB
+#define CEED_SECTION_ALIGN              0x1000000       // 16MB
 
 #define CEED_IMAGE_BASE_VA              0x400000
+#define CEED_OLD
+#ifdef CEED_OLD
 #define CEED_IMPORT_SECTION_RVA         (CEED_SECTION_ALIGN * 1)
 #define CEED_DATA_SECTION_RVA           (CEED_SECTION_ALIGN * 2)
 #define CEED_CODE_SECTION_RVA           (CEED_SECTION_ALIGN * 3)
 #define CEED_RDATA_SECTION_RVA          (CEED_SECTION_ALIGN * 4)
-
+#else
+#define CEED_IMPORT_SECTION_RVA         (CEED_SECTION_ALIGN * 3)
+#define CEED_DATA_SECTION_RVA           (CEED_SECTION_ALIGN * 2)
+#define CEED_CODE_SECTION_RVA           (CEED_SECTION_ALIGN * 1)
+#define CEED_RDATA_SECTION_RVA          (CEED_SECTION_ALIGN * 4)
+#endif
 
 //
 // We use bottom 2K of DATA section for any system state outside of user's
@@ -190,10 +198,10 @@ unsigned char dos_hdr[128] = {
 // functions imported from kernel32 after the exe and dlls are loaded by
 // windows loader.
 //
-u32 k32_fn_array;
-u32 fn_GetStdHandle;
-u32 fn_ReadConsoleA;
-u32 fn_WriteConsoleA;
+static u32 k32_fn_array;
+static u32 fn_GetStdHandle;
+static u32 fn_ReadConsoleA;
+static u32 fn_WriteConsoleA;
 
 typedef struct _section_info
 {
@@ -219,7 +227,7 @@ typedef struct _exe_info
 } exe_info, *pexe_info;
 
 
-psection_info 
+static psection_info
 pe_new_section(pexe_info ei, const char *name, u32 scn_va, u32 attr)
 {
     psection_info si = malloc(sizeof(section_info));
@@ -231,28 +239,41 @@ pe_new_section(pexe_info ei, const char *name, u32 scn_va, u32 attr)
     return si;
 }
 
-pvoid
+static pvoid
 pe_alloc_exe_info()
 {
     pexe_info ei = malloc(sizeof(exe_info));
     memset(ei, 0, sizeof(exe_info));
 
+#ifdef CEED_OLD
     ei->import_scn = pe_new_section(ei, ".idata", CEED_IMPORT_SECTION_RVA,
                                     IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_WRITE);
 
     ei->data_scn = pe_new_section(ei, ".data", CEED_DATA_SECTION_RVA,
-                                  IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_WRITE);
+                                    IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_WRITE);
 
     ei->code_scn = pe_new_section(ei, ".text", CEED_CODE_SECTION_RVA,
-                                  IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_MEM_READ);
+                                    IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_MEM_READ);
 
     ei->rdata_scn = pe_new_section(ei, ".rdata", CEED_RDATA_SECTION_RVA,
-                                   IMAGE_SCN_MEM_READ);
+                                    IMAGE_SCN_MEM_READ);
+#else
+    ei->code_scn = pe_new_section(ei, ".text", CEED_CODE_SECTION_RVA,
+                                    IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_MEM_READ);
 
+    ei->data_scn = pe_new_section(ei, ".data", CEED_DATA_SECTION_RVA,
+                                    IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_WRITE);
+
+    ei->import_scn = pe_new_section(ei, ".idata", CEED_IMPORT_SECTION_RVA,
+                                    IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_WRITE);
+
+    ei->rdata_scn = pe_new_section(ei, ".rdata", CEED_RDATA_SECTION_RVA,
+                                    IMAGE_SCN_MEM_READ);
+#endif
     return ei;
 }
 
-pvoid
+static pvoid
 pe_set_scn(psection_info si, pu8 scn_data, u32 scn_size)
 {
     si->scn_data = scn_data;
@@ -265,53 +286,53 @@ pe_set_scn(psection_info si, pu8 scn_data, u32 scn_size)
     return NULL;
 }
 
-pvoid
+static pvoid
 pe_set_exe_code_scn(pvoid einfo, pu8 scn_data, u32 scn_size)
 {
     pexe_info ei = einfo;
     return pe_set_scn(ei->code_scn, scn_data, scn_size);
 }
 
-pvoid
+static pvoid
 pe_set_exe_data_scn(pvoid einfo, pu8 scn_data, u32 scn_size)
 {
     pexe_info ei = einfo;
     return pe_set_scn(ei->data_scn, scn_data, scn_size);
 }
 
-pvoid
+static pvoid
 pe_set_exe_rdata_scn(pvoid einfo, pu8 scn_data, u32 scn_size)
 {
     pexe_info ei = einfo;
     return pe_set_scn(ei->rdata_scn, scn_data, scn_size);
 }
 
-pvoid
+static pvoid
 pe_set_exe_import_scn(pvoid einfo, pu8 scn_data, u32 scn_size)
 {
     pexe_info ei = einfo;
     return pe_set_scn(ei->import_scn, scn_data, scn_size);
 }
 
-u32
+static u32
 pe_get_code_va(pvoid einfo)
 {
     return CEED_IMAGE_BASE_VA + CEED_CODE_SECTION_RVA;
 }
 
-u32
+static u32
 pe_get_data_va(pvoid einfo)
 {
     return CEED_IMAGE_BASE_VA + CEED_DATA_SECTION_RVA;
 }
 
-u32
+static u32
 pe_get_rdata_va(pvoid einfo)
 {
     return CEED_IMAGE_BASE_VA + CEED_RDATA_SECTION_RVA;
 }
 
-void
+static void
 pe_write_fixed_hdrs(pexe_info ei, FILE *file)
 {
     u32 nt_sig = IMAGE_NT_SIGNATURE;
@@ -331,7 +352,7 @@ pe_write_fixed_hdrs(pexe_info ei, FILE *file)
 }
 
 
-void
+static void
 pe_write_optional_hdr(pexe_info ei, FILE *file)
 {
     IMAGE_OPTIONAL_HEADER32 oh = { 0 };
@@ -345,7 +366,7 @@ pe_write_optional_hdr(pexe_info ei, FILE *file)
     oh.SizeOfUninitializedData = 0;
     oh.AddressOfEntryPoint = 0;                     // Fixed later.
     oh.BaseOfCode = 0;                              // Fixed later.
-    oh.ImageBase = 0x400000;
+    oh.ImageBase = CEED_IMAGE_BASE_VA;
     oh.SectionAlignment = CEED_SECTION_ALIGN;
     oh.FileAlignment = CEED_FILE_ALIGN;
     oh.MajorOperatingSystemVersion = 4;
@@ -392,22 +413,22 @@ pe_write_optional_hdr(pexe_info ei, FILE *file)
     fwrite(&oh, sizeof(oh), 1, file);
 }
 
-void
+static void
 pe_write_section_hdr(psection_info si, FILE *file)
 {
     fwrite(&si->scn_hdr, sizeof(si->scn_hdr), 1, file);
 }
 
-void
+static void
 pe_write_section_data(psection_info si, u32 file_offset, FILE *file)
 {
     fseek(file, file_offset, SEEK_SET);
     fwrite(si->scn_data, si->scn_file_size, 1, file);
 }
 
-u8 data_buffer[4096];
+static u8 data_buffer[4096];
 #define CEED_MAX_VARIABLES  26
-void
+static void
 pe_gen_data_section(pexe_info ei)
 {
     //
@@ -420,8 +441,8 @@ pe_gen_data_section(pexe_info ei)
 #define MAX_FUNCTIONS_IMPORT_PER_DLL    8
 #define c_assert(e) typedef char __c_assert__[(e)?1:-1]
 
-u8 import_buffer[4096];
-void
+static u8 import_buffer[4096];
+static void
 pe_gen_import_section(pexe_info ei)
 {
     pu8 import = import_buffer;
@@ -429,10 +450,13 @@ pe_gen_import_section(pexe_info ei)
     IMAGE_THUNK_DATA32 *th;
     IMAGE_THUNK_DATA32 *oth;
     IMAGE_IMPORT_BY_NAME *iin;
-    const char *dll_names[] = { "kernel32.dll", "ntdll.dll" };
+    const char *dll_names[] = { 
+    	"kernel32.dll",
+    	"ntdll.dll" 
+    	};
     const char *fn_names[][10] = {
-            { "WriteConsoleA", "ReadConsoleA", "GetStdHandle", 0 },
-            { "NtReadFile", 0 },
+        { "WriteConsoleA", "ReadConsoleA", "GetStdHandle", 0 },
+        { "NtReadFile", 0 },
     };
 
     int dll_count = sizeof(dll_names) / sizeof(dll_names[0]);
@@ -503,7 +527,7 @@ pe_gen_import_section(pexe_info ei)
     pe_set_exe_import_scn(ei, import, offset);
 }
 
-void
+static void
 pe_gen_exe_file(pvoid einfo)
 {
     pexe_info ei = einfo;
@@ -549,7 +573,7 @@ pe_gen_exe_file(pvoid einfo)
     fclose(exe_file);
 }
 
-void
+static void
 pe_emit_indirect_call(u32 fn_addr)
 {
     // call [fn_addr]
@@ -559,7 +583,7 @@ pe_emit_indirect_call(u32 fn_addr)
 }
 
 
-void
+static void
 pe_emit_get_std_handle(u8 handle_type, u32 save_location)
 {
     // push handle_type
@@ -570,13 +594,13 @@ pe_emit_get_std_handle(u8 handle_type, u32 save_location)
 
     // mov [data_section_va + save_location], eax
     emit8(0xa3);
-    emit32(get_data_va(ei) + save_location);
+    emit32((u32)get_data_va(ei) + save_location);
 }
 
 #define STD_INPUT_HANDLE    (-10)
 #define STD_OUTPUT_HANDLE   (-11)
 
-void
+static void
 pe_emit_main_init()
 {
     //
@@ -588,14 +612,14 @@ pe_emit_main_init()
 
 }
 
-void
+static void
 pe_emit_main_exit()
 {
     // ret
     emit8(0xc3);
 }
 
-void
+static void
 pe_emit_write(u32 buf_addr, u32 buf_len)
 {
     //
@@ -607,7 +631,7 @@ pe_emit_write(u32 buf_addr, u32 buf_len)
 
     // push temp location (lpNumberOfCharsWritten)
     emit8(0x68);
-    emit32(get_data_va(ei) + CEED_TEMP_U32_1);
+    emit32((u32)get_data_va(ei) + CEED_TEMP_U32_1);
 
     // push buf_len (nNumberOfCharsToWrite)
     emit8(0x68);
@@ -619,14 +643,14 @@ pe_emit_write(u32 buf_addr, u32 buf_len)
 
     // push stdout handle from saved location
     emit16(0x35ff);
-    emit32(get_data_va(ei) + CEED_STDOUT_HANDLE_RVA);
+    emit32((u32)get_data_va(ei) + CEED_STDOUT_HANDLE_RVA);
 
     // call [fn_addr]
     emit16(0x15ff);
     emit32(fn_WriteConsoleA);
 }
 
-void
+static void
 pe_emit_write_reg_input()
 {
     //
@@ -638,7 +662,7 @@ pe_emit_write_reg_input()
 
     // push temp location (lpNumberOfCharsWritten)
     emit8(0x68);
-    emit32(get_data_va(ei) + CEED_TEMP_U32_1);
+    emit32((u32)get_data_va(ei) + CEED_TEMP_U32_1);
 
     // push edx (edx represents buffer length)
     emit8(0x52);
@@ -648,26 +672,24 @@ pe_emit_write_reg_input()
 
     // push stdout handle from saved location
     emit16(0x35ff);
-    emit32(get_data_va(ei) + CEED_STDOUT_HANDLE_RVA);
+    emit32((u32)get_data_va(ei) + CEED_STDOUT_HANDLE_RVA);
 
     // call [fn_addr]
     emit16(0x15ff);
     emit32(fn_WriteConsoleA);
 }
 
-void
-pe_emit_read(u32 buf_addr, u32 buf_len)
-{
-    //
-    // Uses ReadConsole win32 API.
-    //
-
+//
+// Uses ReadConsole win32 API.
+//
+static void
+pe_emit_read(u32 buf_addr, u32 buf_len){
     // push 0 (pInputControl -> NULL)
     emit16(0x006a);
 
     // push temp location (lpNumberOfCharsRead)
     emit8(0x68);
-    emit32(get_data_va(ei) + CEED_TEMP_U32_1);
+    emit32((u32)get_data_va(ei) + CEED_TEMP_U32_1);
 
     // push buf_len (nNumberOfCharsToRead)
     emit8(0x68);
@@ -679,7 +701,7 @@ pe_emit_read(u32 buf_addr, u32 buf_len)
 
     // push stdin handle from saved location
     emit16(0x35ff);
-    emit32(get_data_va(ei) + CEED_STDIN_HANDLE_RVA);
+    emit32((u32)get_data_va(ei) + CEED_STDIN_HANDLE_RVA);
 
     // call [fn_addr]
     emit16(0x15ff);
