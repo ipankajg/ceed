@@ -153,9 +153,11 @@ mk_stmt(int type, int sym_count, ...)
     va_list ap;
     sym *p;
     int i;
-
-    if ((p = malloc(sizeof(sym) + (sym_count-1) * sizeof(sym *))) == NULL)
+    int plen = sizeof(sym) + (sym_count-1) * sizeof(sym *);
+    if ((p = malloc(plen)) == NULL){
         yyerror("out of memory");
+        exit(0);
+    }
 
     p->type = sym_typ_stmt;
     p->stmt.type = type;
@@ -186,31 +188,5 @@ void
 yyerror(char *s)
 {
     fprintf(stdout, "Line: %d, Error: %s\n", yylineno, s);
-}
-
-int 
-main(int argc, char *argv[])
-{
-    func[0] = -1;
-    
-    if (argc == 1) {
-        elf_init();
-    } else if (argc == 2 && (strcmp(argv[1], "-pe") == 0)) {
-        pe_init();
-    } else {
-        printf("Invalid command line. Valid syntax is:\n");
-        printf("For ELF output: ceed < input_file\n");
-        printf("For PE output: ceed -pe < input_file\n");
-        exit(-1);
-    }
-
-    cmplr_init();
-
-    if (yyparse() == 0) {
-        gen_exe();
-        return 0;
-    } else {
-        return -1;
-    }
 }
 

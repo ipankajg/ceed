@@ -240,7 +240,7 @@ elf_write_section_data(psection_info si, FILE *file)
     fwrite(si->scn_data, si->scn_file_size, 1, file);
 }
 
-u8 data_buffer[4096];
+static u8 data_buffer[4096];
 #define CEED_MAX_VARIABLES  26
 void
 elf_gen_data_section(pexe_info ei)

@@ -36,3 +36,8 @@
 *.swp
 *.swo
 *.un~
+
+*.tab.c
+*.tab.h
+*.yy.c
+out
